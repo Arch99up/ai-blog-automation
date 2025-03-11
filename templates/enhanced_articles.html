@@ -1,21 +1,25 @@
-{% extends "base.html" %}
-
-{% block content %}
-<h1>Manage Enhanced Articles</h1>
-
-<h2>Processed Articles</h2>
-<table>
-    <tr>
-        <th>Title</th>
-        <th>URL</th>
-        <th>Content</th>
-    </tr>
-    {% for article in articles %}
-    <tr>
-        <td>{{ article[1] }}</td>
-        <td><a href="{{ article[2] }}" target="_blank">{{ article[2] }}</a></td>
-        <td>{{ article[3] }}</td>
-    </tr>
-    {% endfor %}
-</table>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Articles</title>
+</head>
+<body>
+    <h1>Enhanced Articles</h1>
+    <table>
+        <tr>
+            <th>Title</th>
+            <th>Published</th>
+            <th>Link</th>
+        </tr>
+        {% for article in articles %}
+        <tr>
+            <td>{{ article[1] }}</td>
+            <td>{{ article[2] }}</td>
+            <td><a href="{{ article[3] }}" target="_blank">View</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
