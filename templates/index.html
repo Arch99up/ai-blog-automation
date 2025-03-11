@@ -1,50 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Blog Automation - Dashboard</title>
+    <title>Article Scoring</title>
 </head>
 <body>
-    <h1>🚀 AI Blog Automation - Dashboard</h1>
+    <h1>Article Scoring System</h1>
 
-    <h2>📥 Add RSS Feeds</h2>
-    <form action="/upload_rss" method="post" enctype="multipart/form-data">
-        <input type="text" name="rss_url" placeholder="Enter RSS URL">
-        <button type="submit">➕ Add Single Feed</button><br><br>
-        <input type="file" name="file" accept=".csv">
-        <button type="submit">📂 Upload CSV</button>
-    </form>
+    <!-- Keyword Management -->
+    <h2>Manage Keywords</h2>
+    <input type="text" id="keyword" placeholder="Enter keyword">
+    <select id="category">
+        <option value="business">Business</option>
+        <option value="financial">Financial</option>
+        <option value="productivity">Productivity</option>
+        <option value="technology">Technology</option>
+        <option value="quantitative">Quantitative</option>
+        <option value="negative">Negative</option>
+    </select>
+    <button onclick="addKeyword()">Add Keyword</button>
 
-    <h2>📜 Stored RSS Feeds</h2>
-    <table border="1">
-        <tr><th>Feed URL</th><th>Last Fetched</th></tr>
-        {% for feed in feeds %}
-        <tr>
-            <td>{{ feed[1] }}</td>
-            <td>{{ feed[2] if feed[2] else "Never" }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <ul id="keywordList"></ul>
 
-    <h2>🔄 Fetch New Articles</h2>
-    <form action="/fetch_articles" method="post">
-        <label for="article_limit">Number of Articles per Feed:</label>
-        <input type="number" name="article_limit" min="1" max="20" value="5">
-        <button type="submit">🔄 Fetch Articles</button>
-    </form>
+    <!-- Score Articles Button -->
+    <button onclick="scoreArticles()">Score Unscored Articles</button>
 
-    <h2>📰 Stored Articles</h2>
-    <table border="1">
-        <tr><th>Title</th><th>Source</th><th>Date</th><th>Score</th></tr>
-        {% for article in articles %}
-        <tr>
-            <td><a href="{{ article[2] }}" target="_blank">{{ article[1] }}</a></td>
-            <td>{{ article[3] }}</td>
-            <td>{{ article[4] }}</td>
-            <td>{{ article[5] }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <script>
+        async function addKeyword() {
+            let keyword = document.getElementById("keyword").value;
+            let category = document.getElementById("category").value;
+            await fetch("/add_keyword", {method: "POST", body: JSON.stringify({keyword, category}), headers: {"Content-Type": "application/json"}});
+        }
+
+        async function scoreArticles() {
+            await fetch("/score_articles", {method: "POST"});
+        }
+    </script>
 </body>
 </html>
