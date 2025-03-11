@@ -1,12 +1,17 @@
 <!-- Settings Page -->
-{% extends "base.html" %}
-
-{% block content %}
-<h1>Settings</h1>
-
-<form action="/settings" method="POST">
-    <label for="api_key">OpenAI API Key:</label>
-    <input type="text" id="api_key" name="api_key" value="{{ api_key }}">
-    <button type="submit">Save</button>
-</form>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+</head>
+<body>
+    <h1>Settings</h1>
+    <form action="/settings" method="POST">
+        <label for="api_key">OpenAI API Key:</label>
+        <input type="text" id="api_key" name="api_key" value="{{ api_key }}" required>
+        <button type="submit">Save</button>
+    </form>
+</body>
+</html>
