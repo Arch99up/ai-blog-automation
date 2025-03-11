@@ -1,77 +1,97 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 import feedparser
 import markdown
-import requests
+import sqlite3
+import datetime
 import openai
 import nltk
 from collections import Counter
 
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('averaged_perceptron_tagger')
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
 app = Flask(__name__)
+DB_PATH = "articles.db"  # Database file
 
 # OpenAI API Key (Replace with your actual key)
 OPENAI_API_KEY = "YOUR_OPENAI_API_KEY_HERE"
 
-# Sample RSS Feeds
-RSS_FEEDS = [
-    "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
-    "https://www.theverge.com/rss/index.xml",
-    "https://techcrunch.com/feed/",
-]
+# Function to fetch RSS feeds from database
+def get_rss_feeds():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT url FROM rss_feeds")
+    feeds = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return feeds
 
-# Function to fetch and parse RSS feeds
+# Function to fetch and store articles
 def fetch_articles():
+    feeds = get_rss_feeds()
     articles = []
-    for feed_url in RSS_FEEDS:
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    for feed_url in feeds:
         feed = feedparser.parse(feed_url)
-        for entry in feed.entries[:5]:  # Fetch only top 5 articles per feed
-            articles.append({
-                "title": entry.title,
-                "link": entry.link,
-                "summary": markdown.markdown(entry.summary) if "summary" in entry else "No summary available",
-                "source": feed_url
-            })
+        for entry in feed.entries[:5]:  # Fetch top 5 per feed
+            cursor.execute("SELECT COUNT(*) FROM articles WHERE link=?", (entry.link,))
+            if cursor.fetchone()[0] == 0:  # Avoid duplicates
+                cursor.execute("INSERT INTO articles (title, link, source, date_created, relevance_score) VALUES (?, ?, ?, ?, ?)",
+                               (entry.title, entry.link, feed_url, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 0))
+                conn.commit()
+    
+    conn.close()
+
+# Function to retrieve articles from database
+def get_articles():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, link, source, date_created, relevance_score, selected FROM articles ORDER BY relevance_score DESC")
+    articles = cursor.fetchall()
+    conn.close()
     return articles
 
-# Function to score articles based on keyword frequency & uniqueness
-def score_articles(articles):
-    stop_words = set(stopwords.words("english"))
-    scores = []
-    
-    for article in articles:
-        words = word_tokenize(article["title"].lower() + " " + article["summary"].lower())
-        words = [w for w in words if w.isalnum() and w not in stop_words]
-        
-        word_counts = Counter(words)
-        score = sum(word_counts.values()) / (len(word_counts) + 1)  # Simple relevance score
-        
-        scores.append({
-            "title": article["title"],
-            "link": article["link"],
-            "summary": article["summary"],
-            "source": article["source"],
-            "score": round(score, 2)
-        })
-    
-    return sorted(scores, key=lambda x: x["score"], reverse=True)
+# Function to update article selection for OpenAI processing
+@app.route("/update_selection", methods=["POST"])
+def update_selection():
+    article_id = request.form.get("article_id")
+    selected = request.form.get("selected")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE articles SET selected=? WHERE id=?", (selected, article_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Selection updated successfully"})
 
-# Route: Fetch & Score Articles
-@app.route("/fetch")
-def fetch_and_score():
-    articles = fetch_articles()
-    scored_articles = score_articles(articles)
-    return jsonify(scored_articles)
+# Route: Fetch & Store Articles
+@app.route("/fetch_articles", methods=["POST"])
+def fetch_and_store_articles():
+    fetch_articles()
+    return redirect(url_for("dashboard"))
 
-# Route: Internal Dashboard (Simple UI)
+# Route: Add RSS Feed
+@app.route("/add_rss_feed", methods=["POST"])
+def add_rss_feed():
+    feed_url = request.form.get("feed_url")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO rss_feeds (url) VALUES (?)", (feed_url,))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass  # Ignore duplicate feeds
+    conn.close()
+    return redirect(url_for("dashboard"))
+
+# Route: Dashboard (Display Articles)
 @app.route("/")
 def dashboard():
-    return render_template("index.html")
+    articles = get_articles()
+    return render_template("index.html", articles=articles)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000, debug=True)
