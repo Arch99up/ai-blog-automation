@@ -1,182 +1,169 @@
-import os
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import sqlite3
 import feedparser
-import csv
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+import os
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey"
+DB_PATH = "ai_blog.db"
 
-DB_PATH = "database.db"
-
-# Initialize the database
 def setup_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
-    # Table for storing RSS feeds
-    cursor.execute('''CREATE TABLE IF NOT EXISTS rss_feeds (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        url TEXT UNIQUE,
-                        last_fetched TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-
-    # Table for storing fetched articles
-    cursor.execute('''CREATE TABLE IF NOT EXISTS articles (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        title TEXT,
-                        link TEXT UNIQUE,
-                        source TEXT,
-                        date_created TEXT,
-                        relevance_score INTEGER DEFAULT 0,
-                        selected BOOLEAN DEFAULT 0)''')
-
-    # Table for storing scoring keywords
-    cursor.execute('''CREATE TABLE IF NOT EXISTS scoring_keywords (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        category TEXT,
-                        keyword TEXT UNIQUE)''')
-
-    # Insert default keywords (ignore duplicates)
-    default_keywords = {
-        "AI Applications": ["machine learning", "artificial intelligence", "neural networks", "deep learning"],
-        "Business Impact": ["ROI", "efficiency", "cost reduction", "profitability", "business transformation"],
-        "Use Cases": ["customer service automation", "predictive analytics", "supply chain optimization"],
-        "Tech Stack": ["OpenAI", "ChatGPT", "NLP", "computer vision"]
-    }
-
-    for category, words in default_keywords.items():
-        for word in words:
-            cursor.execute("INSERT OR IGNORE INTO scoring_keywords (category, keyword) VALUES (?, ?)", (category, word))
-
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS feeds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT UNIQUE,
+            last_fetched TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS raw_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            link TEXT UNIQUE,
+            source TEXT,
+            date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            relevance_score INTEGER DEFAULT NULL,
+            selected BOOLEAN DEFAULT FALSE
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS scoring_keywords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            keyword TEXT UNIQUE
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_processed_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_article_id INTEGER,
+            enhanced_text TEXT,
+            FOREIGN KEY (original_article_id) REFERENCES raw_articles(id)
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
 setup_database()
 
-# Fetch all RSS feeds
-def get_rss_feeds():
+@app.route("/")
+def dashboard():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, url, last_fetched FROM rss_feeds ORDER BY last_fetched DESC")
+    
+    cursor.execute("SELECT COUNT(*) FROM feeds")
+    total_feeds = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM raw_articles WHERE date_created >= datetime('now', '-1 day')")
+    new_articles_today = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM raw_articles WHERE relevance_score IS NOT NULL AND date_created >= datetime('now', '-1 day')")
+    scored_articles_today = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM ai_processed_articles")
+    ai_processed_count = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM raw_articles")
+    database_size = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    return render_template("dashboard.html", 
+                           total_feeds=total_feeds,
+                           new_articles_today=new_articles_today,
+                           scored_articles_today=scored_articles_today,
+                           ai_processed_count=ai_processed_count,
+                           database_size=database_size)
+
+@app.route("/manage_feeds", methods=["GET", "POST"])
+def manage_feeds():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if request.method == "POST":
+        url = request.form["feed_url"]
+        try:
+            cursor.execute("INSERT INTO feeds (url) VALUES (?)", (url,))
+            conn.commit()
+            flash("Feed added successfully", "success")
+        except sqlite3.IntegrityError:
+            flash("Feed already exists", "danger")
+    cursor.execute("SELECT * FROM feeds")
     feeds = cursor.fetchall()
     conn.close()
-    return feeds
+    return render_template("manage_feeds.html", feeds=feeds)
 
-# Fetch new articles
-def fetch_articles(article_limit=10):
+@app.route("/fetch_articles", methods=["POST"])
+def fetch_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
-    cursor.execute("SELECT url FROM rss_feeds")
+    cursor.execute("SELECT url FROM feeds")
     feeds = cursor.fetchall()
-
+    
     for feed_url in feeds:
-        feed_url = feed_url[0]
-        try:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:article_limit]:
-                title = entry.title
-                link = entry.link
-                source = feed.feed.title if 'title' in feed.feed else "Unknown"
-                date_created = entry.published if 'published' in entry else "Unknown"
-
-                # Avoid duplicates
-                cursor.execute("SELECT COUNT(*) FROM articles WHERE link = ?", (link,))
-                if cursor.fetchone()[0] == 0:
-                    cursor.execute("INSERT INTO articles (title, link, source, date_created) VALUES (?, ?, ?, ?)",
-                                   (title, link, source, date_created))
-        except Exception as e:
-            print(f"❌ Error fetching/parsing {feed_url}: {str(e)}")
-
+        feed = feedparser.parse(feed_url[0])
+        for entry in feed.entries:
+            title = entry.title
+            link = entry.link
+            source = feed_url[0]
+            try:
+                cursor.execute("INSERT INTO raw_articles (title, link, source) VALUES (?, ?, ?)", (title, link, source))
+            except sqlite3.IntegrityError:
+                continue
     conn.commit()
     conn.close()
+    flash("Articles fetched successfully!", "success")
+    return redirect(url_for("manage_feeds"))
 
-# Score articles based on keywords
+@app.route("/manage_raw_articles")
+def manage_raw_articles():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM raw_articles ORDER BY date_created DESC")
+    articles = cursor.fetchall()
+    conn.close()
+    return render_template("manage_raw_articles.html", articles=articles)
+
+@app.route("/score_articles", methods=["POST"])
 def score_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
-    cursor.execute("SELECT id, title FROM articles WHERE relevance_score = 0")
-    articles = cursor.fetchall()
-
+    cursor.execute("SELECT id, title FROM raw_articles WHERE relevance_score IS NULL")
+    unscored_articles = cursor.fetchall()
     cursor.execute("SELECT keyword FROM scoring_keywords")
     keywords = [row[0] for row in cursor.fetchall()]
-
-    for article_id, title in articles:
-        relevance_score = sum(1 for word in keywords if word.lower() in title.lower())
-        cursor.execute("UPDATE articles SET relevance_score = ? WHERE id = ?", (relevance_score, article_id))
-
+    
+    for article in unscored_articles:
+        score = sum([1 for word in keywords if word.lower() in article[1].lower()])
+        cursor.execute("UPDATE raw_articles SET relevance_score = ? WHERE id = ?", (score, article[0]))
+    
     conn.commit()
     conn.close()
+    flash("Articles scored successfully!", "success")
+    return redirect(url_for("manage_raw_articles"))
 
-# Get articles
-def get_articles():
+@app.route("/manage_enhanced_articles")
+def manage_enhanced_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, link, source, date_created, relevance_score, selected FROM articles ORDER BY relevance_score DESC")
-    articles = cursor.fetchall()
+    cursor.execute("SELECT * FROM ai_processed_articles")
+    enhanced_articles = cursor.fetchall()
     conn.close()
-    return articles
+    return render_template("manage_enhanced_articles.html", articles=enhanced_articles)
 
-# Get scoring keywords
-def get_keywords():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT category, keyword FROM scoring_keywords ORDER BY category")
-    keywords = cursor.fetchall()
-    conn.close()
-    return keywords
-
-# Routes
-@app.route("/")
-def dashboard():
-    feeds = get_rss_feeds()
-    articles = get_articles()
-    keywords = get_keywords()
-    return render_template("index.html", feeds=feeds, articles=articles, keywords=keywords)
-
-@app.route("/upload_rss", methods=["POST"])
-def upload_rss():
-    file = request.files.get("rss_csv")
-    rss_url = request.form.get("rss_url")
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    if file:
-        csv_data = file.read().decode("utf-8").splitlines()
-        reader = csv.reader(csv_data)
-        for row in reader:
-            url = row[0]
-            cursor.execute("INSERT OR IGNORE INTO rss_feeds (url) VALUES (?)", (url,))
-
-    if rss_url:
-        cursor.execute("INSERT OR IGNORE INTO rss_feeds (url) VALUES (?)", (rss_url,))
-
-    conn.commit()
-    conn.close()
-    return redirect(url_for("dashboard"))
-
-@app.route("/fetch_articles", methods=["POST"])
-def fetch_articles_route():
-    fetch_articles()
-    return redirect(url_for("dashboard"))
-
-@app.route("/score_articles", methods=["POST"])
-def score_articles_route():
-    score_articles()
-    return redirect(url_for("dashboard"))
-
-@app.route("/update_keywords", methods=["POST"])
-def update_keywords():
-    category = request.form.get("category")
-    keyword = request.form.get("keyword")
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO scoring_keywords (category, keyword) VALUES (?, ?)", (category, keyword))
-    conn.commit()
-    conn.close()
-    return redirect(url_for("dashboard"))
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if request.method == "POST":
+        openai_key = request.form["openai_api_key"]
+        os.environ["OPENAI_API_KEY"] = openai_key
+        flash("API Key updated successfully!", "success")
+    return render_template("settings.html", openai_api_key=os.environ.get("OPENAI_API_KEY", ""))
 
 if __name__ == "__main__":
     app.run(debug=True)
