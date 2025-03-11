@@ -4,46 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Blog Automation - Dashboard</title>
-    <script>
-        function updateSelection(articleId, checkbox) {
-            fetch('/update_selection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `article_id=${articleId}&selected=${checkbox.checked ? 1 : 0}`
-            });
-        }
-    </script>
 </head>
 <body>
     <h1>🚀 AI Blog Automation - Dashboard</h1>
 
-    <h2>📥 Batch Upload RSS Feeds</h2>
-    <form action="/upload_csv" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".csv" required>
+    <h2>📥 Add RSS Feeds</h2>
+    <form action="/upload_rss" method="post" enctype="multipart/form-data">
+        <input type="text" name="rss_url" placeholder="Enter RSS URL">
+        <button type="submit">➕ Add Single Feed</button><br><br>
+        <input type="file" name="file" accept=".csv">
         <button type="submit">📂 Upload CSV</button>
     </form>
 
-    <h2>🔄 Fetch & Score Articles</h2>
-    <form action="/fetch_articles" method="post">
-        <button type="submit">🔄 Fetch New Articles</button>
-    </form>
-    <form action="/score_articles" method="post">
-        <button type="submit">📊 Score Unscored Articles</button>
-    </form>
+    <h2>📜 Stored RSS Feeds</h2>
+    <table border="1">
+        <tr><th>Feed URL</th><th>Last Fetched</th></tr>
+        {% for feed in feeds %}
+        <tr>
+            <td>{{ feed[1] }}</td>
+            <td>{{ feed[2] if feed[2] else "Never" }}</td>
+        </tr>
+        {% endfor %}
+    </table>
 
-    <h2>📢 Send Selected to OpenAI</h2>
-    <form action="/send_to_openai" method="post">
-        <button type="submit">🤖 Process Selected</button>
+    <h2>🔄 Fetch New Articles</h2>
+    <form action="/fetch_articles" method="post">
+        <label for="article_limit">Number of Articles per Feed:</label>
+        <input type="number" name="article_limit" min="1" max="20" value="5">
+        <button type="submit">🔄 Fetch Articles</button>
     </form>
 
     <h2>📰 Stored Articles</h2>
     <table border="1">
-        <tr><th>Title</th><th>Score</th><th>Send to AI</th></tr>
+        <tr><th>Title</th><th>Source</th><th>Date</th><th>Score</th></tr>
         {% for article in articles %}
         <tr>
-            <td>{{ article[1] }}</td>
+            <td><a href="{{ article[2] }}" target="_blank">{{ article[1] }}</a></td>
+            <td>{{ article[3] }}</td>
+            <td>{{ article[4] }}</td>
             <td>{{ article[5] }}</td>
-            <td><input type="checkbox" onclick="updateSelection({{ article[0] }}, this)" {% if article[6] == 1 %}checked{% endif %}></td>
         </tr>
         {% endfor %}
     </table>
