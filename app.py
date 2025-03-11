@@ -1,12 +1,15 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-import sqlite3
-import feedparser
 import os
+import sqlite3
+import csv
+import feedparser
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey"
+
 DB_PATH = "database.db"
 
-# Setup Database
+# Ensure the database is set up
 def setup_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -15,34 +18,26 @@ def setup_database():
         CREATE TABLE IF NOT EXISTS feeds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT UNIQUE,
-            last_fetched TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            last_fetched TIMESTAMP DEFAULT NULL
         )
     """)
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            feed_url TEXT,
             title TEXT,
-            link TEXT UNIQUE,
-            source TEXT,
-            date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            relevance_score INTEGER DEFAULT 0,
-            selected INTEGER DEFAULT 0
+            link TEXT,
+            published TEXT,
+            summary TEXT,
+            score INTEGER DEFAULT NULL
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            openai_api_key TEXT
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS scoring_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT,
-            keyword TEXT UNIQUE
+            api_key TEXT
         )
     """)
     
@@ -51,102 +46,132 @@ def setup_database():
 
 setup_database()
 
-# Routes
-@app.route('/')
-def dashboard():
-    return render_template("index.html")
 
-@app.route('/feeds', methods=['GET', 'POST'])
+# 1️⃣ **Manage Feeds Section** - Upload CSV and Add Single URL
+@app.route('/feeds', methods=['GET'])
 def manage_feeds():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        feed_url = request.form.get('feed_url')
-        cursor.execute("INSERT OR IGNORE INTO feeds (url) VALUES (?)", (feed_url,))
-        conn.commit()
-    
     cursor.execute("SELECT * FROM feeds")
     feeds = cursor.fetchall()
     conn.close()
     return render_template("feeds.html", feeds=feeds)
 
-@app.route('/fetch_articles', methods=['POST'])
-def fetch_articles():
+
+@app.route('/upload_rss', methods=['POST'])
+def upload_rss():
+    """ Handles CSV uploads for bulk RSS feed addition """
+    if 'file' not in request.files:
+        flash('No file part')
+        return redirect(url_for('manage_feeds'))
+
+    file = request.files['file']
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(url_for('manage_feeds'))
+
+    if file:
+        file_path = os.path.join('uploads', file.filename)
+        file.save(file_path)
+
+        with open(file_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if len(row) > 0:
+                    add_feed(row[0])  # Process each RSS URL
+
+        os.remove(file_path)  # Clean up uploaded file
+        flash('RSS Feeds uploaded successfully')
+
+    return redirect(url_for('manage_feeds'))
+
+
+@app.route('/add_feed', methods=['POST'])
+def add_feed_route():
+    """ Allows adding a single RSS feed manually """
+    url = request.form.get('rss_url')
+    if url:
+        add_feed(url)
+        flash("Feed added successfully")
+    else:
+        flash("Invalid URL")
+    return redirect(url_for('manage_feeds'))
+
+
+def add_feed(url):
+    """ Helper function to add an RSS feed to the database """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+    try:
+        cursor.execute("INSERT INTO feeds (url) VALUES (?)", (url,))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        flash("Feed already exists")
+    conn.close()
+
+
+# 2️⃣ **Fetch Articles from Feeds**
+@app.route('/fetch_articles', methods=['POST'])
+def fetch_articles():
+    """ Fetches articles from all stored RSS feeds """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
     cursor.execute("SELECT url FROM feeds")
     feeds = cursor.fetchall()
-    
+
     for feed in feeds:
-        d = feedparser.parse(feed[0])
-        for entry in d.entries:
-            cursor.execute("INSERT OR IGNORE INTO articles (title, link, source) VALUES (?, ?, ?)",
-                           (entry.title, entry.link, feed[0]))
-    
+        feed_url = feed[0]
+        parsed_feed = feedparser.parse(feed_url)
+
+        if parsed_feed.entries:
+            for entry in parsed_feed.entries:
+                title = entry.get("title", "No Title")
+                link = entry.get("link", "")
+                published = entry.get("published", "Unknown Date")
+                summary = entry.get("summary", "No Summary")
+
+                cursor.execute("""
+                    INSERT INTO articles (feed_url, title, link, published, summary)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (feed_url, title, link, published, summary))
+
     conn.commit()
     conn.close()
+    flash("Articles fetched successfully")
     return redirect(url_for('manage_articles'))
 
-@app.route('/articles')
+
+# 3️⃣ **Manage Articles Section**
+@app.route('/articles', methods=['GET'])
 def manage_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM articles ORDER BY date_created DESC")
+    cursor.execute("SELECT * FROM articles ORDER BY id DESC")
     articles = cursor.fetchall()
     conn.close()
     return render_template("articles.html", articles=articles)
 
-@app.route('/score_articles', methods=['POST'])
-def score_articles():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title FROM articles WHERE relevance_score = 0")
-    articles = cursor.fetchall()
-    
-    cursor.execute("SELECT keyword FROM scoring_keywords")
-    keywords = [row[0] for row in cursor.fetchall()]
-    
-    for article in articles:
-        score = sum([article[1].count(kw) for kw in keywords])
-        cursor.execute("UPDATE articles SET relevance_score = ? WHERE id = ?", (score, article[0]))
-    
-    conn.commit()
-    conn.close()
-    return redirect(url_for('manage_articles'))
 
+# 4️⃣ **Settings Page (API Key)**
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     if request.method == 'POST':
-        api_key = request.form.get('openai_api_key')
-        cursor.execute("DELETE FROM settings")
-        cursor.execute("INSERT INTO settings (openai_api_key) VALUES (?)", (api_key,))
+        api_key = request.form.get("api_key")
+        cursor.execute("DELETE FROM settings")  # Only store one API key
+        cursor.execute("INSERT INTO settings (api_key) VALUES (?)", (api_key,))
         conn.commit()
-    
-    cursor.execute("SELECT openai_api_key FROM settings")
+        flash("API Key Updated")
+
+    cursor.execute("SELECT api_key FROM settings LIMIT 1")
     setting = cursor.fetchone()
     conn.close()
+
     return render_template("settings.html", api_key=setting[0] if setting else "")
 
-@app.route('/manage_keywords', methods=['GET', 'POST'])
-def manage_keywords():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    if request.method == 'POST':
-        category = request.form.get('category')
-        keyword = request.form.get('keyword')
-        cursor.execute("INSERT OR IGNORE INTO scoring_keywords (category, keyword) VALUES (?, ?)", (category, keyword))
-        conn.commit()
-    
-    cursor.execute("SELECT * FROM scoring_keywords ORDER BY category")
-    keywords = cursor.fetchall()
-    conn.close()
-    return render_template("keywords.html", keywords=keywords)
 
+# Run the application
 if __name__ == '__main__':
     app.run(debug=True)
