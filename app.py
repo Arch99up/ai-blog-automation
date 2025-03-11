@@ -6,6 +6,7 @@ import requests
 app = Flask(__name__)
 DATABASE = "ai_blog.db"
 
+# ✅ FIX: Ensure the database is initialized on startup
 def init_db():
     """Creates necessary tables if they don't exist."""
     conn = sqlite3.connect(DATABASE)
@@ -30,10 +31,29 @@ def init_db():
         )
     """)
 
+    # Create enhanced articles table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS enhanced_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            link TEXT UNIQUE NOT NULL,
+            published TEXT,
+            enhanced_content TEXT
+        )
+    """)
+
+    # Create settings table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
-# Run database initialization BEFORE starting Flask app
+# ✅ RUN DATABASE INIT ON STARTUP (Fixes missing tables issue)
 init_db()
 
 @app.route('/')
@@ -121,6 +141,37 @@ def manage_articles():
     articles = cursor.fetchall()
     conn.close()
     return render_template('articles.html', articles=articles)
+
+@app.route('/score_articles', methods=['POST'])
+def score_articles():
+    """Placeholder route for scoring articles - will need actual logic"""
+    return "Scoring functionality not implemented yet", 501  # Not Implemented
+
+@app.route('/enhanced_articles')
+def enhanced_articles():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM enhanced_articles ORDER BY id DESC")
+    articles = cursor.fetchall()
+    conn.close()
+    return render_template('enhanced_articles.html', articles=articles)
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        api_key = request.form.get('api_key')
+        cursor.execute("DELETE FROM settings")  # Ensure only one key is stored
+        cursor.execute("INSERT INTO settings (api_key) VALUES (?)", (api_key,))
+        conn.commit()
+
+    cursor.execute("SELECT api_key FROM settings LIMIT 1")
+    setting = cursor.fetchone()
+    conn.close()
+
+    return render_template('settings.html', api_key=setting[0] if setting else "")
 
 if __name__ == '__main__':
     app.run(debug=True)
