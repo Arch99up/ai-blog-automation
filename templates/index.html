@@ -17,31 +17,31 @@
 <body>
     <h1>🚀 AI Blog Automation - Dashboard</h1>
 
-    <h2>📢 Add RSS Feed</h2>
-    <form action="/add_rss_feed" method="post">
-        <input type="text" name="feed_url" placeholder="Enter RSS Feed URL" required>
-        <button type="submit">➕ Add Feed</button>
+    <h2>📥 Batch Upload RSS Feeds</h2>
+    <form action="/upload_csv" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".csv" required>
+        <button type="submit">📂 Upload CSV</button>
     </form>
 
-    <h2>🔄 Fetch New Articles</h2>
+    <h2>🔄 Fetch & Score Articles</h2>
     <form action="/fetch_articles" method="post">
-        <button type="submit">🔄 Fetch Now</button>
+        <button type="submit">🔄 Fetch New Articles</button>
+    </form>
+    <form action="/score_articles" method="post">
+        <button type="submit">📊 Score Unscored Articles</button>
+    </form>
+
+    <h2>📢 Send Selected to OpenAI</h2>
+    <form action="/send_to_openai" method="post">
+        <button type="submit">🤖 Process Selected</button>
     </form>
 
     <h2>📰 Stored Articles</h2>
     <table border="1">
-        <tr>
-            <th>Title</th>
-            <th>Source</th>
-            <th>Date</th>
-            <th>Score</th>
-            <th>Send to OpenAI</th>
-        </tr>
+        <tr><th>Title</th><th>Score</th><th>Send to AI</th></tr>
         {% for article in articles %}
         <tr>
-            <td><a href="{{ article[2] }}" target="_blank">{{ article[1] }}</a></td>
-            <td>{{ article[3] }}</td>
-            <td>{{ article[4] }}</td>
+            <td>{{ article[1] }}</td>
             <td>{{ article[5] }}</td>
             <td><input type="checkbox" onclick="updateSelection({{ article[0] }}, this)" {% if article[6] == 1 %}checked{% endif %}></td>
         </tr>
