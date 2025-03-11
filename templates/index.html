@@ -1,39 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Article Scoring</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Blog Automation</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background: #333;
+            color: white;
+            padding: 20px;
+            height: 100vh;
+        }
+        .sidebar a {
+            color: white;
+            text-decoration: none;
+            display: block;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        .sidebar a:hover {
+            background: #555;
+        }
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Article Scoring System</h1>
-
-    <!-- Keyword Management -->
-    <h2>Manage Keywords</h2>
-    <input type="text" id="keyword" placeholder="Enter keyword">
-    <select id="category">
-        <option value="business">Business</option>
-        <option value="financial">Financial</option>
-        <option value="productivity">Productivity</option>
-        <option value="technology">Technology</option>
-        <option value="quantitative">Quantitative</option>
-        <option value="negative">Negative</option>
-    </select>
-    <button onclick="addKeyword()">Add Keyword</button>
-
-    <ul id="keywordList"></ul>
-
-    <!-- Score Articles Button -->
-    <button onclick="scoreArticles()">Score Unscored Articles</button>
-
-    <script>
-        async function addKeyword() {
-            let keyword = document.getElementById("keyword").value;
-            let category = document.getElementById("category").value;
-            await fetch("/add_keyword", {method: "POST", body: JSON.stringify({keyword, category}), headers: {"Content-Type": "application/json"}});
-        }
-
-        async function scoreArticles() {
-            await fetch("/score_articles", {method: "POST"});
-        }
-    </script>
+    <div class="sidebar">
+        <h3>AI Blog Automation</h3>
+        <a href="/feeds"><i class="fas fa-rss"></i> Manage Feeds</a>
+        <a href="/articles"><i class="fas fa-newspaper"></i> Manage Raw Articles</a>
+        <a href="/enhanced_articles"><i class="fas fa-edit"></i> Manage Enhanced Articles</a>
+        <a href="/settings"><i class="fas fa-cog"></i> Settings</a>
+    </div>
+    <div class="main-content">
+        <h1>Welcome to AI Blog Automation</h1>
+        <p>Use the menu on the left to navigate the system.</p>
+    </div>
 </body>
 </html>
