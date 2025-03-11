@@ -12,6 +12,38 @@ nltk.download('stopwords', quiet=True)
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
+def setup_database():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Create table for storing articles
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            link TEXT,
+            source TEXT,
+            date_created TEXT,
+            relevance_score REAL,
+            selected INTEGER DEFAULT 0
+        )
+    ''')
+
+    # Create table for storing RSS feeds
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS rss_feeds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT UNIQUE
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+# Run this when the app starts
+setup_database()
+
+
 app = Flask(__name__)
 DB_PATH = "articles.db"  # Database file
 
