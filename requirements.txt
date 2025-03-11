@@ -1,6 +1,5 @@
 flask>=3.1.0
 requests>=2.32.3
-sqlite3
 xml.etree.ElementTree
 lxml>=4.9.3
 gunicorn>=23.0.0
