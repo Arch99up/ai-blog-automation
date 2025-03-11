@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Keywords</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Manage Keywords</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <form method="post" action="{{ url_for('manage_keywords') }}">
+        <label for="keyword">New Keyword:</label>
+        <input type="text" name="keyword" id="keyword" required>
+        <button type="submit">Add</button>
+    </form>
+    
+    <h2>Stored Keywords</h2>
+    <ul>
+        {% for keyword in keywords %}
+            <li>{{ keyword['keyword'] }}</li>
+        {% else %}
+            <li>No keywords available.</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
