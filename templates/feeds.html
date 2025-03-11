@@ -1,27 +1,45 @@
 <!-- Feeds Page -->
 {% extends "base.html" %}
+
 {% block content %}
-<h2>Manage Feeds</h2>
-<form action="/upload_rss" method="POST" enctype="multipart/form-data">
-    <input type="file" name="rss_file" accept=".csv">
-    <button type="submit" class="btn btn-primary">Upload CSV</button>
-</form>
-<table class="table mt-3">
-    <thead>
-        <tr>
-            <th>Feed URL</th>
-            <th>Last Fetch</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for feed in feeds %}
-        <tr>
-            <td>{{ feed[1] }}</td>
-            <td>{{ feed[2] }}</td>
-            <td><a href="/fetch_articles/{{ feed[0] }}" class="btn btn-sm btn-success">Fetch Articles</a></td>
-        </tr>
-        {% endfor %}
-    </tbody>
+<h1>Manage Feeds</h1>
+
+<div class="form-container">
+    <form action="/add_feed" method="POST">
+        <label for="rss_url">Add RSS Feed:</label>
+        <input type="text" id="rss_url" name="rss_url" required>
+        <button type="submit">Add</button>
+    </form>
+
+    <form action="/upload_rss" method="POST" enctype="multipart/form-data" style="margin-top: 10px;">
+        <label for="file">Upload CSV:</label>
+        <input type="file" id="file" name="file" accept=".csv" required>
+        <button type="submit">Upload</button>
+    </form>
+</div>
+
+<h2>Stored Feeds</h2>
+<table>
+    <tr>
+        <th>Feed URL</th>
+        <th>Last Fetched</th>
+        <th>Actions</th>
+    </tr>
+    {% for feed in feeds %}
+    <tr>
+        <td>{{ feed[1] }}</td>
+        <td>{{ feed[2] if feed[2] else 'Never' }}</td>
+        <td>
+            <form action="/delete_feed" method="POST" style="display:inline;">
+                <input type="hidden" name="feed_url" value="{{ feed[1] }}">
+                <button type="submit">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
 </table>
+
+<form action="/fetch_articles" method="POST">
+    <button type="submit" style="margin-top: 10px;">Fetch New Articles</button>
+</form>
 {% endblock %}
