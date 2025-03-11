@@ -1,0 +1,10 @@
+<!-- Settings Page -->
+{% extends "base.html" %}
+{% block content %}
+<h2>Settings</h2>
+<form action="/update_api_key" method="POST">
+    <label>OpenAI API Key:</label>
+    <input type="text" name="api_key" class="form-control" value="{{ api_key }}">
+    <button type="submit" class="btn btn-primary mt-3">Save</button>
+</form>
+{% endblock %}
