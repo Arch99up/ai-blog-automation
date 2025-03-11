@@ -1,0 +1,116 @@
+/* General Styling */
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    background-color: #f4f4f4;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    background: #222;
+    color: white;
+    height: 100vh;
+    padding: 20px;
+    position: fixed;
+    box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar h2 {
+    text-align: center;
+    font-size: 22px;
+    margin-bottom: 20px;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar ul li {
+    padding: 15px;
+    cursor: pointer;
+    text-align: center;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    transition: background 0.3s ease-in-out;
+}
+
+.sidebar ul li:hover {
+    background: #444;
+}
+
+/* Main Content */
+.content {
+    margin-left: 270px;
+    padding: 20px;
+    flex-grow: 1;
+}
+
+/* Form Styling */
+form {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    display: inline-block;
+    margin-bottom: 15px;
+}
+
+input[type="text"], input[type="file"] {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-right: 10px;
+}
+
+button {
+    background: #007BFF;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+}
+
+button:hover {
+    background: #0056b3;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background: #007BFF;
+    color: white;
+}
+
+tr:hover {
+    background: #f1f1f1;
+}
+
+/* API Key Input */
+input#api_key {
+    width: 60%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
