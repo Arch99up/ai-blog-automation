@@ -52,8 +52,13 @@
 
         <h2>Fetch New Articles</h2>
         <form action="/fetch_articles" method="POST">
-            <label for="article_limit">Articles per Feed:</label>
-            <input type="number" id="article_limit" name="article_limit" value="10" min="1">
+            <label for="num_articles">Number of articles:</label>
+            <select name="num_articles" id="num_articles">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
             <button type="submit">Fetch New Articles</button>
         </form>
     </div>
