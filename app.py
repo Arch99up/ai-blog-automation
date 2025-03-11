@@ -33,10 +33,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Run database initialization before the first request
-@app.before_first_request
-def setup():
-    init_db()
+# Run database initialization BEFORE starting Flask app
+init_db()
 
 @app.route('/')
 def home():
@@ -125,5 +123,4 @@ def manage_articles():
     return render_template('articles.html', articles=articles)
 
 if __name__ == '__main__':
-    init_db()  # Ensure database is created on startup
     app.run(debug=True)
