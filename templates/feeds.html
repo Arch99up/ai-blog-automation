@@ -1,45 +1,61 @@
 <!-- Feeds Page -->
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Feeds</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="sidebar">
+        <h2>AI Blog Automation</h2>
+        <ul>
+            <li onclick="location.href='/feeds'">Manage Feeds</li>
+            <li onclick="location.href='/articles'">Manage Raw Articles</li>
+            <li onclick="location.href='/enhanced_articles'">Manage Enhanced Articles</li>
+            <li onclick="location.href='/settings'">Settings</li>
+        </ul>
+    </div>
 
-{% block content %}
-<h1>Manage Feeds</h1>
-
-<div class="form-container">
-    <form action="/add_feed" method="POST">
-        <label for="rss_url">Add RSS Feed:</label>
-        <input type="text" id="rss_url" name="rss_url" required>
-        <button type="submit">Add</button>
-    </form>
-
-    <form action="/upload_rss" method="POST" enctype="multipart/form-data" style="margin-top: 10px;">
-        <label for="file">Upload CSV:</label>
-        <input type="file" id="file" name="file" accept=".csv" required>
-        <button type="submit">Upload</button>
-    </form>
-</div>
-
-<h2>Stored Feeds</h2>
-<table>
-    <tr>
-        <th>Feed URL</th>
-        <th>Last Fetched</th>
-        <th>Actions</th>
-    </tr>
-    {% for feed in feeds %}
-    <tr>
-        <td>{{ feed[1] }}</td>
-        <td>{{ feed[2] if feed[2] else 'Never' }}</td>
-        <td>
-            <form action="/delete_feed" method="POST" style="display:inline;">
-                <input type="hidden" name="feed_url" value="{{ feed[1] }}">
-                <button type="submit">Delete</button>
+    <div class="content">
+        <h1>Manage Feeds</h1>
+        
+        <div class="form-container">
+            <form action="/feeds" method="POST">
+                <label for="rss_url">Add RSS Feed:</label>
+                <input type="text" id="rss_url" name="rss_url" required>
+                <button type="submit">Add</button>
             </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+        </div>
 
-<form action="/fetch_articles" method="POST">
-    <button type="submit" style="margin-top: 10px;">Fetch New Articles</button>
-</form>
-{% endblock %}
+        <h2>Stored Feeds</h2>
+        <table>
+            <tr>
+                <th>Feed URL</th>
+                <th>Last Fetched</th>
+                <th>Actions</th>
+            </tr>
+            {% for feed in feeds %}
+            <tr>
+                <td>{{ feed[1] }}</td>
+                <td>{{ feed[2] if feed[2] else 'Never' }}</td>
+                <td>
+                    <form action="/delete_feed" method="POST">
+                        <input type="hidden" name="feed_url" value="{{ feed[1] }}">
+                        <button type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <h2>Fetch New Articles</h2>
+        <form action="/fetch_articles" method="POST">
+            <label for="article_limit">Number of Articles:</label>
+            <input type="number" id="article_limit" name="article_limit" min="1" value="10">
+            <button type="submit">Fetch</button>
+        </form>
+    </div>
+</body>
+</html>
