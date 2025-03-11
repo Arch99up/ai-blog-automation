@@ -206,7 +206,10 @@ def setup_database():
     db.close()
 
 # Run the setup on startup
-setup_database()
+@app.before_first_request
+def initialize_database():
+    setup_database()
+
 
 
 
