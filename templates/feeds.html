@@ -3,64 +3,43 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Feeds</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="sidebar">
-        <h2>AI Blog Automation</h2>
-        <ul>
-            <li onclick="location.href='/feeds'">Manage Feeds</li>
-            <li onclick="location.href='/articles'">Manage Raw Articles</li>
-            <li onclick="location.href='/enhanced_articles'">Manage Enhanced Articles</li>
-            <li onclick="location.href='/settings'">Settings</li>
-        </ul>
-    </div>
-
-    <div class="content">
-        <h1>Manage Feeds</h1>
-        
-        <div class="form-container">
-            <form action="/feeds" method="POST">
-                <label for="rss_url">Add RSS Feed:</label>
-                <input type="text" id="rss_url" name="rss_url" required>
-                <button type="submit">Add</button>
-            </form>
-        </div>
-
-        <h2>Stored Feeds</h2>
-        <table>
-            <tr>
-                <th>Feed URL</th>
-                <th>Last Fetched</th>
-                <th>Actions</th>
-            </tr>
-            {% for feed in feeds %}
-            <tr>
-                <td>{{ feed[1] }}</td>
-                <td>{{ feed[2] if feed[2] else 'Never' }}</td>
-                <td>
-                    <form action="/delete_feed" method="POST">
-                        <input type="hidden" name="feed_url" value="{{ feed[1] }}">
-                        <button type="submit">Delete</button>
-                    </form>
-                </td>
-            </tr>
+    <h1>Manage Feeds</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
             {% endfor %}
-        </table>
-
-        <h2>Fetch New Articles</h2>
-        <form action="/fetch_articles" method="POST">
-            <label for="num_articles">Number of articles:</label>
-            <select name="num_articles" id="num_articles">
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-            </select>
-            <button type="submit">Fetch New Articles</button>
-        </form>
-    </div>
+        {% endif %}
+    {% endwith %}
+    
+    <form method="post" action="{{ url_for('manage_feeds') }}">
+        <label for="feed_url">Feed URL:</label>
+        <input type="url" name="feed_url" id="feed_url" required>
+        <button type="submit">Add Feed</button>
+    </form>
+    
+    <form method="post" action="{{ url_for('manage_feeds') }}" enctype="multipart/form-data">
+        <label for="csv_file">Upload CSV:</label>
+        <input type="file" name="csv_file" id="csv_file" accept=".csv">
+        <button type="submit">Upload</button>
+    </form>
+    
+    <h2>Stored Feeds</h2>
+    <ul>
+        {% for feed in feeds %}
+            <li>
+                {{ feed['url'] }} 
+                <a href="{{ url_for('delete_feed', feed_id=feed['id']) }}">[Delete]</a>
+            </li>
+        {% else %}
+            <li>No feeds available.</li>
+        {% endfor %}
+    </ul>
+    
+    <a href="{{ url_for('fetch_articles') }}">Fetch New Articles</a>
 </body>
 </html>
