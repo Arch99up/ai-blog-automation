@@ -1,142 +1,174 @@
 import os
 import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, flash, g
 import feedparser
-import requests
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from datetime import datetime
+import openai
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-DATABASE = "database.db"
 
-# Ensure database and tables exist
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+DATABASE = 'database.db'
 
-def setup_database():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS feeds (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE NOT NULL,
-            last_fetched TIMESTAMP
-        )
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            feed_url TEXT NOT NULL,
-            title TEXT NOT NULL,
-            link TEXT NOT NULL,
-            summary TEXT,
-            published TIMESTAMP,
-            relevance_score INTEGER DEFAULT 0
-        )
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS scoring_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT NOT NULL,
-            keyword TEXT UNIQUE NOT NULL
-        )
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            openai_api_key TEXT
-        )
-        """)
-        conn.commit()
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+        db.row_factory = sqlite3.Row
+    return db
 
-setup_database()
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 
-# Routes
+def init_db():
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feeds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                last_fetched TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                link TEXT NOT NULL,
+                published TIMESTAMP,
+                summary TEXT,
+                feed_id INTEGER,
+                relevance_score INTEGER,
+                enhanced_content TEXT,
+                FOREIGN KEY(feed_id) REFERENCES feeds(id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS keywords (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                keyword TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                openai_api_key TEXT
+            )
+        ''')
+        db.commit()
+
 @app.route('/')
-def home():
+def index():
     return redirect(url_for('manage_feeds'))
 
 @app.route('/feeds', methods=['GET', 'POST'])
 def manage_feeds():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
+    db = get_db()
+    cursor = db.cursor()
     if request.method == 'POST':
-        feed_url = request.form['rss_url']
-        try:
-            cursor.execute("INSERT INTO feeds (url) VALUES (?)", (feed_url,))
-            conn.commit()
-            flash("Feed added successfully!", "success")
-        except sqlite3.IntegrityError:
-            flash("Feed already exists!", "warning")
-
-    cursor.execute("SELECT * FROM feeds")
+        if 'feed_url' in request.form:
+            feed_url = request.form['feed_url']
+            if feed_url:
+                cursor.execute('INSERT INTO feeds (url) VALUES (?)', (feed_url,))
+                db.commit()
+                flash('Feed added successfully!', 'success')
+            else:
+                flash('Feed URL cannot be empty.', 'danger')
+        elif 'csv_file' in request.files:
+            csv_file = request.files['csv_file']
+            if csv_file:
+                content = csv_file.read().decode('utf-8')
+                urls = content.splitlines()
+                for url in urls:
+                    cursor.execute('INSERT INTO feeds (url) VALUES (?)', (url,))
+                db.commit()
+                flash('Feeds from CSV added successfully!', 'success')
+            else:
+                flash('No CSV file selected.', 'danger')
+    cursor.execute('SELECT * FROM feeds')
     feeds = cursor.fetchall()
-    conn.close()
     return render_template('feeds.html', feeds=feeds)
 
-@app.route('/delete_feed', methods=['POST'])
-def delete_feed():
-    feed_url = request.form['feed_url']
-    conn = get_db_connection()
-    conn.execute("DELETE FROM feeds WHERE url = ?", (feed_url,))
-    conn.commit()
-    conn.close()
-    flash("Feed deleted successfully!", "success")
+@app.route('/delete_feed/<int:feed_id>')
+def delete_feed(feed_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('DELETE FROM feeds WHERE id = ?', (feed_id,))
+    db.commit()
+    flash('Feed deleted successfully!', 'success')
     return redirect(url_for('manage_feeds'))
 
-@app.route('/fetch_articles', methods=['POST'])
+@app.route('/fetch_articles')
 def fetch_articles():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT url FROM feeds")
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT * FROM feeds')
     feeds = cursor.fetchall()
-
     for feed in feeds:
-        feed_url = feed['url']
-        parsed_feed = feedparser.parse(feed_url)
-
-        for entry in parsed_feed.entries:
-            try:
-                cursor.execute("""
-                INSERT INTO articles (feed_url, title, link, summary, published)
-                VALUES (?, ?, ?, ?, ?)
-                """, (feed_url, entry.title, entry.link, entry.summary, entry.published))
-            except sqlite3.IntegrityError:
-                continue
-
-    conn.commit()
-    conn.close()
-    flash("Articles fetched successfully!", "success")
-    return redirect(url_for('manage_feeds'))
+        feed_data = feedparser.parse(feed['url'])
+        for entry in feed_data.entries:
+            cursor.execute('SELECT * FROM articles WHERE link = ?', (entry.link,))
+            if cursor.fetchone() is None:
+                published = datetime(*entry.published_parsed[:6]) if 'published_parsed' in entry else None
+                cursor.execute('''
+                    INSERT INTO articles (title, link, published, summary, feed_id)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (entry.title, entry.link, published, entry.get('summary', ''), feed['id']))
+        cursor.execute('UPDATE feeds SET last_fetched = ? WHERE id = ?', (datetime.now(), feed['id']))
+    db.commit()
+    flash('Articles fetched successfully!', 'success')
+    return redirect(url_for('manage_articles'))
 
 @app.route('/articles')
 def manage_articles():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM articles ORDER BY published DESC")
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT * FROM articles')
     articles = cursor.fetchall()
-    conn.close()
     return render_template('articles.html', articles=articles)
+
+@app.route('/delete_article/<int:article_id>')
+def delete_article(article_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('DELETE FROM articles WHERE id = ?', (article_id,))
+    db.commit()
+    flash('Article deleted successfully!', 'success')
+    return redirect(url_for('manage_articles'))
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
+    db = get_db()
+    cursor = db.cursor()
     if request.method == 'POST':
-        api_key = request.form['openai_api_key']
-        cursor.execute("DELETE FROM settings")
-        cursor.execute("INSERT INTO settings (openai_api_key) VALUES (?)", (api_key,))
-        conn.commit()
-        flash("API Key updated!", "success")
+        api_key = request.form['api_key']
+        cursor.execute('DELETE FROM settings')
+        cursor.execute('INSERT INTO settings (openai_api_key) VALUES (?)', (api_key,))
+        db.commit()
+        flash('API Key updated!', 'success')
+    cursor.execute('SELECT openai_api_key FROM settings')
+    api_key = cursor.fetchone()
+    return render_template('settings.html', api_key=api_key)
 
-    cursor.execute("SELECT openai_api_key FROM settings")
-    setting = cursor.fetchone()
-    conn.close()
-    return render_template('settings.html', api_key=setting['openai_api_key'] if setting else "")
+@app.route('/keywords', methods=['GET', 'POST'])
+def manage_keywords():
+    db = get_db()
+    cursor = db.cursor()
+    if request.method == 'POST':
+        keyword = request.form['keyword']
+        cursor.execute('INSERT INTO keywords (keyword) VALUES (?)', (keyword,))
+        db.commit()
+        flash('Keyword added successfully!', 'success')
+    cursor.execute('SELECT * FROM keywords')
+    keywords = cursor.fetchall()
+    return render_template('keywords.html', keywords=keywords)
 
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True)
+
 
