@@ -1,12 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import sqlite3
 import feedparser
 import os
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
-DB_PATH = "ai_blog.db"
+DB_PATH = "database.db"
 
+# Setup Database
 def setup_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -20,14 +20,21 @@ def setup_database():
     """)
     
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS raw_articles (
+        CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
             link TEXT UNIQUE,
             source TEXT,
             date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            relevance_score INTEGER DEFAULT NULL,
-            selected BOOLEAN DEFAULT FALSE
+            relevance_score INTEGER DEFAULT 0,
+            selected INTEGER DEFAULT 0
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            openai_api_key TEXT
         )
     """)
     
@@ -39,131 +46,107 @@ def setup_database():
         )
     """)
     
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ai_processed_articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            original_article_id INTEGER,
-            enhanced_text TEXT,
-            FOREIGN KEY (original_article_id) REFERENCES raw_articles(id)
-        )
-    """)
-    
     conn.commit()
     conn.close()
 
 setup_database()
 
-@app.route("/")
+# Routes
+@app.route('/')
 def dashboard():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT COUNT(*) FROM feeds")
-    total_feeds = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM raw_articles WHERE date_created >= datetime('now', '-1 day')")
-    new_articles_today = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM raw_articles WHERE relevance_score IS NOT NULL AND date_created >= datetime('now', '-1 day')")
-    scored_articles_today = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM ai_processed_articles")
-    ai_processed_count = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM raw_articles")
-    database_size = cursor.fetchone()[0]
-    
-    conn.close()
-    
-    return render_template("dashboard.html", 
-                           total_feeds=total_feeds,
-                           new_articles_today=new_articles_today,
-                           scored_articles_today=scored_articles_today,
-                           ai_processed_count=ai_processed_count,
-                           database_size=database_size)
+    return render_template("index.html")
 
-@app.route("/manage_feeds", methods=["GET", "POST"])
+@app.route('/feeds', methods=['GET', 'POST'])
 def manage_feeds():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    if request.method == "POST":
-        url = request.form["feed_url"]
-        try:
-            cursor.execute("INSERT INTO feeds (url) VALUES (?)", (url,))
-            conn.commit()
-            flash("Feed added successfully", "success")
-        except sqlite3.IntegrityError:
-            flash("Feed already exists", "danger")
+    
+    if request.method == 'POST':
+        feed_url = request.form.get('feed_url')
+        cursor.execute("INSERT OR IGNORE INTO feeds (url) VALUES (?)", (feed_url,))
+        conn.commit()
+    
     cursor.execute("SELECT * FROM feeds")
     feeds = cursor.fetchall()
     conn.close()
-    return render_template("manage_feeds.html", feeds=feeds)
+    return render_template("feeds.html", feeds=feeds)
 
-@app.route("/fetch_articles", methods=["POST"])
+@app.route('/fetch_articles', methods=['POST'])
 def fetch_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    
     cursor.execute("SELECT url FROM feeds")
     feeds = cursor.fetchall()
     
-    for feed_url in feeds:
-        feed = feedparser.parse(feed_url[0])
-        for entry in feed.entries:
-            title = entry.title
-            link = entry.link
-            source = feed_url[0]
-            try:
-                cursor.execute("INSERT INTO raw_articles (title, link, source) VALUES (?, ?, ?)", (title, link, source))
-            except sqlite3.IntegrityError:
-                continue
+    for feed in feeds:
+        d = feedparser.parse(feed[0])
+        for entry in d.entries:
+            cursor.execute("INSERT OR IGNORE INTO articles (title, link, source) VALUES (?, ?, ?)",
+                           (entry.title, entry.link, feed[0]))
+    
     conn.commit()
     conn.close()
-    flash("Articles fetched successfully!", "success")
-    return redirect(url_for("manage_feeds"))
+    return redirect(url_for('manage_articles'))
 
-@app.route("/manage_raw_articles")
-def manage_raw_articles():
+@app.route('/articles')
+def manage_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM raw_articles ORDER BY date_created DESC")
+    cursor.execute("SELECT * FROM articles ORDER BY date_created DESC")
     articles = cursor.fetchall()
     conn.close()
-    return render_template("manage_raw_articles.html", articles=articles)
+    return render_template("articles.html", articles=articles)
 
-@app.route("/score_articles", methods=["POST"])
+@app.route('/score_articles', methods=['POST'])
 def score_articles():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title FROM raw_articles WHERE relevance_score IS NULL")
-    unscored_articles = cursor.fetchall()
+    cursor.execute("SELECT id, title FROM articles WHERE relevance_score = 0")
+    articles = cursor.fetchall()
+    
     cursor.execute("SELECT keyword FROM scoring_keywords")
     keywords = [row[0] for row in cursor.fetchall()]
     
-    for article in unscored_articles:
-        score = sum([1 for word in keywords if word.lower() in article[1].lower()])
-        cursor.execute("UPDATE raw_articles SET relevance_score = ? WHERE id = ?", (score, article[0]))
+    for article in articles:
+        score = sum([article[1].count(kw) for kw in keywords])
+        cursor.execute("UPDATE articles SET relevance_score = ? WHERE id = ?", (score, article[0]))
     
     conn.commit()
     conn.close()
-    flash("Articles scored successfully!", "success")
-    return redirect(url_for("manage_raw_articles"))
+    return redirect(url_for('manage_articles'))
 
-@app.route("/manage_enhanced_articles")
-def manage_enhanced_articles():
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM ai_processed_articles")
-    enhanced_articles = cursor.fetchall()
+    
+    if request.method == 'POST':
+        api_key = request.form.get('openai_api_key')
+        cursor.execute("DELETE FROM settings")
+        cursor.execute("INSERT INTO settings (openai_api_key) VALUES (?)", (api_key,))
+        conn.commit()
+    
+    cursor.execute("SELECT openai_api_key FROM settings")
+    setting = cursor.fetchone()
     conn.close()
-    return render_template("manage_enhanced_articles.html", articles=enhanced_articles)
+    return render_template("settings.html", api_key=setting[0] if setting else "")
 
-@app.route("/settings", methods=["GET", "POST"])
-def settings():
-    if request.method == "POST":
-        openai_key = request.form["openai_api_key"]
-        os.environ["OPENAI_API_KEY"] = openai_key
-        flash("API Key updated successfully!", "success")
-    return render_template("settings.html", openai_api_key=os.environ.get("OPENAI_API_KEY", ""))
+@app.route('/manage_keywords', methods=['GET', 'POST'])
+def manage_keywords():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        category = request.form.get('category')
+        keyword = request.form.get('keyword')
+        cursor.execute("INSERT OR IGNORE INTO scoring_keywords (category, keyword) VALUES (?, ?)", (category, keyword))
+        conn.commit()
+    
+    cursor.execute("SELECT * FROM scoring_keywords ORDER BY category")
+    keywords = cursor.fetchall()
+    conn.close()
+    return render_template("keywords.html", keywords=keywords)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
