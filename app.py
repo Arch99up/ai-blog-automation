@@ -171,4 +171,42 @@ if __name__ == '__main__':
     init_db()
     app.run(debug=True)
 
+def setup_database():
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS feeds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL,
+        last_fetched TIMESTAMP
+    )''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS articles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        link TEXT NOT NULL,
+        published TIMESTAMP,
+        summary TEXT,
+        feed_id INTEGER,
+        relevance_score INTEGER,
+        enhanced_content TEXT,
+        FOREIGN KEY(feed_id) REFERENCES feeds(id)
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS keywords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        keyword TEXT NOT NULL
+    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        openai_api_key TEXT
+    )''')
+
+    db.commit()
+    db.close()
+
+# Run the setup on startup
+setup_database()
+
+
 
