@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Blog Automation - Dashboard</title>
+</head>
+<body>
+    <h1>🚀 AI Blog Automation - Dashboard</h1>
+    <button onclick="fetchArticles()">🔄 Fetch & Score Articles</button>
+    <ul id="articles"></ul>
+    
+    <script>
+        function fetchArticles() {
+            fetch('/fetch')
+            .then(response => response.json())
+            .then(data => {
+                let articlesList = document.getElementById("articles");
+                articlesList.innerHTML = "";
+                data.forEach(article => {
+                    let listItem = document.createElement("li");
+                    listItem.innerHTML = `<strong>${article.title}</strong> (Score: ${article.score})<br>
+                    <a href="${article.link}" target="_blank">Read more</a><br><hr>`;
+                    articlesList.appendChild(listItem);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
