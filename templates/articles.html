@@ -1,0 +1,27 @@
+<!-- Raw Articles Page -->
+{% extends "base.html" %}
+{% block content %}
+<h2>Manage Raw Articles</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Source</th>
+            <th>Published</th>
+            <th>Score</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for article in articles %}
+        <tr>
+            <td>{{ article[1] }}</td>
+            <td>{{ article[2] }}</td>
+            <td>{{ article[3] }}</td>
+            <td>{{ article[4] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<button class="btn btn-warning" onclick="location.href='/score_articles'">Score Unscored Articles</button>
+{% endblock %}
+
