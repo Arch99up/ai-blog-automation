@@ -6,8 +6,10 @@ import openai
 import nltk
 from collections import Counter
 
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('averaged_perceptron_tagger')
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
