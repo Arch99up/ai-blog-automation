@@ -1,26 +1,35 @@
 <!-- Raw Articles Page -->
-{% extends "base.html" %}
-
-{% block content %}
-<h1>Manage Raw Articles</h1>
-
-<h2>Fetched Articles</h2>
-<table>
-    <tr>
-        <th>Title</th>
-        <th>Published Date</th>
-        <th>Link</th>
-    </tr>
-    {% for article in articles %}
-    <tr>
-        <td>{{ article[1] }}</td>
-        <td>{{ article[3] }}</td>
-        <td><a href="{{ article[2] }}" target="_blank">Read More</a></td>
-    </tr>
-    {% endfor %}
-</table>
-
-<form action="/score_articles" method="POST">
-    <button type="submit" style="margin-top: 10px;">Score Unscored Articles</button>
-</form>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Articles</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Manage Articles</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <a href="{{ url_for('score_articles') }}">Score Articles</a>
+    
+    <ul>
+        {% for article in articles %}
+            <li>
+                <strong>{{ article['title'] }}</strong> - 
+                <a href="{{ article['link'] }}" target="_blank">Read More</a>
+                <p>Published: {{ article['published'] }}</p>
+                <p>Relevance Score: {{ article['relevance_score'] if article['relevance_score'] else 'Not Scored' }}</p>
+                <a href="{{ url_for('delete_article', article_id=article['id']) }}">[Delete]</a>
+            </li>
+        {% else %}
+            <li>No articles available.</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
