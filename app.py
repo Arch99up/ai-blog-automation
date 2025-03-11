@@ -7,9 +7,11 @@ app = Flask(__name__)
 DATABASE = "ai_blog.db"
 
 def init_db():
+    """Creates necessary tables if they don't exist."""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    
+
+    # Create feeds table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS feeds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,7 +19,8 @@ def init_db():
             last_fetched TIMESTAMP DEFAULT NULL
         )
     """)
-    
+
+    # Create articles table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +32,11 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+# Run database initialization before the first request
+@app.before_first_request
+def setup():
+    init_db()
 
 @app.route('/')
 def home():
@@ -51,7 +59,7 @@ def manage_feeds():
     cursor.execute("SELECT * FROM feeds")
     feeds = cursor.fetchall()
     conn.close()
-    
+
     return render_template('feeds.html', feeds=feeds)
 
 @app.route('/delete_feed', methods=['POST'])
@@ -68,7 +76,7 @@ def delete_feed():
 
 @app.route('/fetch_articles', methods=['POST'])
 def fetch_articles():
-    article_limit = int(request.form.get('article_limit', 10))
+    article_limit = int(request.form.get('article_limit', 10))  # User-defined limit
 
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
@@ -117,5 +125,5 @@ def manage_articles():
     return render_template('articles.html', articles=articles)
 
 if __name__ == '__main__':
-    init_db()
+    init_db()  # Ensure database is created on startup
     app.run(debug=True)
