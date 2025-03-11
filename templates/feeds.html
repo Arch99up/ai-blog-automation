@@ -1,0 +1,27 @@
+<!-- Feeds Page -->
+{% extends "base.html" %}
+{% block content %}
+<h2>Manage Feeds</h2>
+<form action="/upload_rss" method="POST" enctype="multipart/form-data">
+    <input type="file" name="rss_file" accept=".csv">
+    <button type="submit" class="btn btn-primary">Upload CSV</button>
+</form>
+<table class="table mt-3">
+    <thead>
+        <tr>
+            <th>Feed URL</th>
+            <th>Last Fetch</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for feed in feeds %}
+        <tr>
+            <td>{{ feed[1] }}</td>
+            <td>{{ feed[2] }}</td>
+            <td><a href="/fetch_articles/{{ feed[0] }}" class="btn btn-sm btn-success">Fetch Articles</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
