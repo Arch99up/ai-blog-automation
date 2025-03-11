@@ -8,14 +8,14 @@
 <table>
     <tr>
         <th>Title</th>
-        <th>URL</th>
-        <th>Score</th>
+        <th>Published Date</th>
+        <th>Link</th>
     </tr>
     {% for article in articles %}
     <tr>
         <td>{{ article[1] }}</td>
-        <td><a href="{{ article[2] }}" target="_blank">{{ article[2] }}</a></td>
-        <td>{{ article[4] if article[4] else 'Not Scored' }}</td>
+        <td>{{ article[3] }}</td>
+        <td><a href="{{ article[2] }}" target="_blank">Read More</a></td>
     </tr>
     {% endfor %}
 </table>
