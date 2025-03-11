@@ -2,24 +2,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enhanced Articles</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <h1>Enhanced Articles</h1>
-    <table>
-        <tr>
-            <th>Title</th>
-            <th>Published</th>
-            <th>Link</th>
-        </tr>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <ul>
         {% for article in articles %}
-        <tr>
-            <td>{{ article[1] }}</td>
-            <td>{{ article[2] }}</td>
-            <td><a href="{{ article[3] }}" target="_blank">View</a></td>
-        </tr>
+            <li>
+                <strong>{{ article['title'] }}</strong>
+                <p>Enhanced Content:</p>
+                <p>{{ article['enhanced_content'] if article['enhanced_content'] else 'Not Enhanced' }}</p>
+            </li>
+        {% else %}
+            <li>No enhanced articles available.</li>
         {% endfor %}
-    </table>
+    </ul>
 </body>
 </html>
